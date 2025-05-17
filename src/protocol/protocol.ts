@@ -11,6 +11,8 @@ export type ClientMessage =
     "wc-mouse-button" |
     "wc-mouse-sync" |
     "wc-exit" |
+    "wc-memory-read" |
+    "wc-memory-write" |
     "wc-sync-sleep" |
     "wc-pause" |
     "wc-resume" |
@@ -34,6 +36,8 @@ export type ServerMessage =
     "ws-sound-init" |
     "ws-sound-push" |
     "ws-config" |
+    "ws-memory-read" |
+    "ws-memory-write" |
     "ws-sync-sleep" |
     "ws-connected" |
     "ws-disconnected";
@@ -84,6 +88,12 @@ export class CommandInterfaceOverTransportLayer implements CommandInterface {
 
     private disconnectPromise: Promise<void> | null = null;
     private disconnectResolve: () => void = () => {/**/};
+
+    private memoryReadPromise: Promise<Uint8Array> | null = null;
+    private memoryReadResolve: (data: Uint8Array) => void = () => {/**/};
+
+    private memoryWritePromise: Promise<number> | null = null;
+    private memoryWriteResolve: (bytesWritten: number) => void = () => {/**/};
 
     public sharedMemory?: SharedArrayBuffer;
     public directSound?: DirectSound;
@@ -199,6 +209,12 @@ export class CommandInterfaceOverTransportLayer implements CommandInterface {
                 if (this.options.onExtractProgress) {
                     this.options.onExtractProgress(props.index, props.file, props.extracted, props.count);
                 }
+            } break;
+            case "ws-memory-read": {
+                this.onMemoryRead(props.memory);
+            } break;
+            case "ws-memory-write": {
+                this.onMemoryWrite(props.bytesWritten);
             } break;
             default: {
                 // eslint-disable-next-line
@@ -370,6 +386,50 @@ export class CommandInterfaceOverTransportLayer implements CommandInterface {
             this.persistResolve(bundle);
             delete this.persistPromise;
             delete this.persistResolve;
+        }
+    }
+
+    public readMemory(address: number, size: number): Promise<Uint8Array> {
+        if (this.memoryReadPromise !== null) {
+            return Promise.reject(new Error("Already prefoming memory read..."));
+        }
+
+        const promise = new Promise<Uint8Array>((resolve) => {
+            this.memoryReadResolve = resolve;
+            this.sendClientMessage("wc-memory-read", { address, size });
+        });
+
+        this.memoryReadPromise = promise;
+        return promise;
+    }
+
+    private onMemoryRead(data: Uint8Array) {
+        if (this.memoryReadResolve) {
+            this.memoryReadResolve(data);
+            this.memoryReadPromise = null;
+            this.memoryReadResolve = () => {/**/};
+        }
+    }
+
+    public writeMemory(address: number, data: Uint8Array): Promise<number> {
+        if (this.memoryWritePromise !== null) {
+            return Promise.reject(new Error("There's another memory write in progress..."));
+        }
+
+        const promise = new Promise<number>((resolve) => {
+            this.memoryWriteResolve = resolve;
+            this.sendClientMessage("wc-memory-write", { address, data });
+        });
+
+        this.memoryWritePromise = promise;
+        return promise;
+    }
+
+    private onMemoryWrite(bytesWritten: number) {
+        if (this.memoryWriteResolve) {
+            this.memoryWriteResolve(bytesWritten);
+            this.memoryWritePromise = null;
+            this.memoryWriteResolve = () => {/**/};
         }
     }
 

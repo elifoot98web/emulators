@@ -32,5 +32,5 @@ RUN source /emsdk/emsdk_env.sh && yarn run gulp
 
 EXPOSE 8080
 
-CMD source /emsdk/emsdk_env.sh && hs dist
+CMD source /emsdk/emsdk_env.sh && npx http-server dist
 

@@ -96,6 +96,21 @@ EM_JS(void, ws_init_runtime, (const char* sessionId), {
             }
           }
         } break;
+        case "wc-memory-read": {
+          Module._readMemory(data.props.address, data.props.size);
+        } break;
+        case "wc-memory-write": {
+          var bytesWritten = 0;
+          const memorySize = Module.HEAPU8.length;
+          const address = data.props.address;
+          const targetData = new Uint8Array(data.props.data);
+          const size = data.props.data.length;
+          for(var i = 0; i < size && (i + address < memorySize); i++) {
+              Module.HEAPU8[address + i] = data.props.data[i];
+              bytesWritten++;
+          }
+          Module.sendMessage("ws-memory-write", { bytesWritten });
+        } break;
         case "wc-pack-fs-to-bundle": {
           try {
             Module.persist = function(archive) {
@@ -287,6 +302,11 @@ EM_JS(void, ws_client_network_disconnected, (NetworkType networkType), {
     Module.sendMessage("ws-disconnected", { networkType });
   });
 
+EM_JS(void, ws_client_read_memory, (const uint32_t address, const uint32_t size), {
+    const memory = Module.HEAPU8.slice(address, address + size);
+    Module.sendMessage("ws-memory-read", { memory });
+  });
+
 EM_JS(void, emsc_exit_runtime, (), {
     if (!Module.exit) {
       var message = "ERR! exitRuntime called without request" +
@@ -452,6 +472,10 @@ extern "C" void EMSCRIPTEN_KEEPALIVE mouseSync(uint64_t syncMs) {
 
 extern "C" void EMSCRIPTEN_KEEPALIVE exitRuntime() {
   emsc_exit_runtime();
+}
+
+extern "C" void EMSCRIPTEN_KEEPALIVE readMemory(const uint32_t address, const uint32_t size) {
+  ws_client_read_memory(address, size);
 }
 
 void workerTickHandler() {
