@@ -411,14 +411,14 @@ export class CommandInterfaceOverTransportLayer implements CommandInterface {
         }
     }
 
-    public writeMemory(address: number, data: Uint8Array): Promise<number> {
+    public writeMemory(address: number, buffer: Uint8Array): Promise<number> {
         if (this.memoryWritePromise !== null) {
             return Promise.reject(new Error("There's another memory write in progress..."));
         }
 
         const promise = new Promise<number>((resolve) => {
             this.memoryWriteResolve = resolve;
-            this.sendClientMessage("wc-memory-write", { address, data });
+            this.sendClientMessage("wc-memory-write", { address, buffer });
         });
 
         this.memoryWritePromise = promise;
